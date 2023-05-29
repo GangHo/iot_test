@@ -15,6 +15,7 @@ String number = "";
 String person = "";
 String menu = "";
 String price = "";
+String content = "";
 
 int fried_price = 15000;
 int spicy_price = 16000;
@@ -23,7 +24,9 @@ int total_price = 0;
 int num = 0;
 
 int count = 0;
+int s_count = 0;
 String pub_flag = "OFF";
+String staff_flag = "OFF";
 
 unsigned long lastPublishMillis = -pubInterval;
 SSD1306 display(0x3c, 4, 5, GEOMETRY_128_32);
@@ -94,6 +97,29 @@ void person_numberpush()
     person = "4";
   }
 }
+void contentpush()
+{
+  if (encoderValue < 10)
+  {
+    content = "Spoon ";
+  }
+  if (encoderValue > 9 && encoderValue < 20)
+  {
+    content = "Chopsticks";
+  }
+  if (encoderValue > 19 && encoderValue < 30)
+  {
+    content = "Water";
+  }
+  if (encoderValue > 29 && encoderValue < 40)
+  {
+    content = "Tissue";
+  }
+  if (encoderValue > 39 && encoderValue < 50)
+  {
+    content = "Staff Call";
+  }
+}
 
 IRAM_ATTR void handleRotary()
 {
@@ -125,21 +151,31 @@ IRAM_ATTR void buttonClicked() // 음식종류 선택
   pressed = true;
   Serial.println("pushed");
   count++;
-  if (count == 3)
+  if (count == 3 || s_count == 2)
   {
     pub_flag = "ON";
     count = 0;
+    s_count = 0;
   }
 }
 void publishData()
 {
   StaticJsonDocument<512> root;
   JsonObject data = root.createNestedObject("d");
-  data["heartbeat"] = "alive";
-  data["menu"] = menu;
-  data["number"] = number;
-  data["person"] = person;
-  data["price"] = price;
+  if (staff_flag == "ON")
+  {
+    data["heartbeat"] = "alive";
+    data["call"] = content;
+    staff_flag = "OFF";
+  }
+  else
+  {
+    data["heartbeat"] = "alive";
+    data["menu"] = menu;
+    data["number"] = number;
+    data["person"] = person;
+    data["price"] = price;
+  }
   serializeJson(root, msgBuffer);
   client.publish(evtTopic, msgBuffer);
 }
@@ -371,12 +407,52 @@ void loop()
       pressed = false;
     }
   }
+  //--------------------------------------------스태프 호출-------------------------------------------
+  if (encoderValue > 29 && encoderValue < 40)
+  {
+    display.clear();
+    display.drawString(35, 0, "Staff call");
+    display.display();
+    if (pressed == true)
+    {
+      s_count++;
+      delay(500);
+      pressed = false;
+      encoderValue = 0;
+      delay(500);
+      while (true)
+      {
+        delay(1000);
+        Serial.println(encoderValue);
+        contentpush();
+        display.clear();
+        display.drawString(35, 0, "Staff call");
+        display.drawString(0, 10, "Content: ");
+        display.drawString(50, 10, content);
+        display.display();
+        if (pressed == true)
+        {
+          s_count++;
+          delay(500);
+          pressed = false;
+          delay(500);
+          encoderValue = 0;
+          break;
+        }
+      }
+      staff_flag = "ON";
+      delay(500);
+      pressed = false;
+    }
+  }
+
   Serial.println(pub_flag);
   delay(500);
   if (pub_flag == "ON")
   {
     Serial.println("publish!");
     publishData();
+    delay(300);
     pub_flag = "OFF";
   }
   delay(500);
